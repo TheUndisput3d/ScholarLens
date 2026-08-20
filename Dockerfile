@@ -16,7 +16,7 @@ RUN pip install --upgrade pip \
 
 COPY backend/ backend/
 COPY documents/ documents/
-COPY app.py evaluate.py main.py goldens.json sessions.json ./
+COPY app.py evaluate.py main.py goldens.json ./
 COPY .streamlit/ .streamlit/
 
 RUN mkdir -p /app/data /app/embedding_cache
