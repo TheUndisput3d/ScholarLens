@@ -98,6 +98,24 @@ flowchart LR
 
 ## Architecture
 
+### Frontend and API boundary
+
+The Streamlit workspace is a client of the FastAPI service. Session creation,
+document ingestion, document listing, chat execution, graph checkpoints, and
+the `/btw` side channel all use HTTP endpoints exposed by the API on port
+`8000`; Streamlit is available on port `8501`. This keeps the RAG state in one
+backend service and lets the frontend run independently.
+
+For local development, start the API before Streamlit:
+
+```bash
+uvicorn backend.api:app --host 127.0.0.1 --port 8000
+streamlit run app.py
+```
+
+Set `SCHOLARLENS_API_URL` when the API uses a non-default address. Docker
+Compose sets it to `http://api:8000` automatically.
+
 ```mermaid
 flowchart TB
     subgraph Client[Browser]

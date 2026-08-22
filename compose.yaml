@@ -43,7 +43,7 @@ services:
       "if [ \"$$LLM_PROVIDER\" = \"ollama\" ]; then ollama pull $$OLLAMA_MODEL && ollama pull $$OLLAMA_EMBEDDING_MODEL; else echo 'OpenAI selected; skipping Ollama model pull.'; fi"
     restart: "no"
 
-  app:
+  api:
     build:
       context: .
       dockerfile: Dockerfile
@@ -68,11 +68,38 @@ services:
       QDRANT_URL: http://qdrant:6333
       QDRANT_API_KEY: ""
       TAVILY_API_KEY: ${TAVILY_API_KEY:-}
+    command: ["uvicorn", "backend.api:app", "--host", "0.0.0.0", "--port", "8000"]
     ports:
-      - "8501:8501"
+      - "8000:8000"
     volumes:
       - scholarlens_state:/app/data
       - scholarlens_cache:/app/embedding_cache
+    healthcheck:
+      test: ["CMD-SHELL", "curl --fail http://localhost:8000/health || exit 1"]
+      interval: 30s
+      timeout: 5s
+      start_period: 30s
+      retries: 5
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    depends_on:
+      api:
+        condition: service_healthy
+    environment:
+      SCHOLARLENS_API_URL: http://api:8000
+      SCHOLARLENS_API_TIMEOUT: 300
+    ports:
+      - "8501:8501"
+    healthcheck:
+      test: ["CMD-SHELL", "curl --fail http://localhost:8501/_stcore/health || exit 1"]
+      interval: 30s
+      timeout: 5s
+      start_period: 30s
+      retries: 5
 
 volumes:
   qdrant_data:
