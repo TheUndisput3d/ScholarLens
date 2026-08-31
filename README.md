@@ -402,7 +402,7 @@ All metrics use the repository threshold of `0.70`. The saved results show ten o
 
 I ran ScholarLens end to end with Ollama `qwen3:8b`, `nomic-embed-text`, Qdrant, and Tavily configured in the local environment. I loaded the included research report, asked a paper-grounded security question, and inspected the persisted conversation and graph output.
 
-**Walkthrough:** [Download the ScholarLens feature walkthrough](docs/assets/video/scholarlens-walkthrough.mp4)
+**Walkthrough:** [Watch the edited ScholarLens end-to-end demo](docs/assets/video/scholarlens-e2e-demo.mp4)
 
 | Workspace | Evidence |
 |---|---|
@@ -412,6 +412,8 @@ I ran ScholarLens end to end with Ollama `qwen3:8b`, `nomic-embed-text`, Qdrant,
 | Completed graph-state inspection | ![ScholarLens graph state](docs/assets/screenshots/04-graph-state.png) |
 | Completed webpage ingestion | ![ScholarLens webpage ingestion](docs/assets/screenshots/05-webpage-ingestion.png) |
 | Completed ArXiv ingestion | ![ScholarLens ArXiv ingestion](docs/assets/screenshots/06-arxiv-ingestion.png) |
+| Completed claim verification | ![ScholarLens claim verification](docs/assets/screenshots/07-claim-verification.png) |
+| Completed direct answer | ![ScholarLens direct answer](docs/assets/screenshots/08-direct-answer.png) |
 
 ![ScholarLens LangGraph workflow](graph.png)
 
