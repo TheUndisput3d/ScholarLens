@@ -100,11 +100,19 @@ flowchart LR
 
 ### Frontend and API boundary
 
-The Streamlit workspace is a client of the FastAPI service. Session creation,
-document ingestion, document listing, chat execution, graph checkpoints, and
-the `/btw` side channel all use HTTP endpoints exposed by the API on port
-`8000`; Streamlit is available on port `8501`. This keeps the RAG state in one
-backend service and lets the frontend run independently.
+The browser connects only to Streamlit. Streamlit is an HTTP client of the
+FastAPI service; it does not import the RAG graph, vector store, loaders, or
+model clients directly. This keeps session state and all retrieval work in one
+backend service while allowing the UI to run independently.
+
+```text
+Browser → Streamlit UI → FastAPI → LangGraph / Qdrant / Ollama
+                    HTTP inside the Compose network
+```
+
+The internal Docker API address is `http://api:8000`. Browser developer tools
+therefore show Streamlit traffic rather than the Streamlit-to-API request. Use
+`docker compose logs -f api` to observe requests made by uploads and chats.
 
 For local development, start the API before Streamlit:
 
@@ -115,6 +123,18 @@ streamlit run app.py
 
 Set `SCHOLARLENS_API_URL` when the API uses a non-default address. Docker
 Compose sets it to `http://api:8000` automatically.
+
+| Endpoint | Purpose |
+|---|---|
+| `GET /health` | Service readiness check |
+| `GET`, `POST /sessions` | List or create research sessions |
+| `GET /sessions/{id}/messages` | Restore persisted conversation history |
+| `GET /sessions/{id}/documents` | List indexed source titles |
+| `POST /sessions/{id}/documents/file` | Upload PDF, TXT, or Markdown |
+| `POST /sessions/{id}/documents/web` | Ingest a web page |
+| `POST /sessions/{id}/documents/arxiv` | Ingest a paper by ArXiv ID or title |
+| `POST /sessions/{id}/chat` | Execute the full RAG graph for a session |
+| `POST /btw` | Run the unpersisted side-channel question flow |
 
 ```mermaid
 flowchart TB
@@ -483,7 +503,10 @@ python -m pip install --upgrade pip
 pip install -r requirements.txt
 ```
 
-Docker Compose is the recommended path because it starts ScholarLens, Ollama, and Qdrant together. For local development, the pinned `requirements.txt` installation above is the source of truth.
+Docker Compose is the recommended path because it starts ScholarLens and
+Qdrant together while reusing the Ollama service already running on the host.
+For local development, the pinned `requirements.txt` installation above is the
+source of truth.
 
 ### 2. Configure secrets
 
@@ -540,19 +563,39 @@ The graph will route the question, retrieve chunks, check relevance, generate an
 
 ## Docker deployment
 
-The included Compose stack starts the Streamlit app, Ollama, model initialization, and Qdrant together. It is the recommended deployment path.
+The Compose stack starts Qdrant, FastAPI, and Streamlit. It uses the host
+Ollama instance through Docker's `host.docker.internal` gateway, so it reuses
+models that are already pulled on the machine instead of downloading another
+copy inside a container.
 
 ```bash
 cp .env.example .env
 docker compose up --build
 ```
 
-Open `http://localhost:8501` or follow the longer [`DOCKER_GUIDE.md`](DOCKER_GUIDE.md) for model settings and EC2 deployment.
+Open the Streamlit URL published in `compose.yaml` (currently
+`http://localhost:8605`). The API is published separately on
+`http://localhost:8003`; its readiness endpoint is `/health`.
+
+Before starting Compose, make host Ollama reachable from the Docker bridge.
+For a systemd-managed Ollama service, set `OLLAMA_HOST` to the Docker bridge
+address (for example, `172.17.0.1:11434`), reload systemd, and restart Ollama:
+
+```bash
+sudo systemctl edit ollama
+# Add:
+# [Service]
+# Environment="OLLAMA_HOST=172.17.0.1:11434"
+sudo systemctl daemon-reload
+sudo systemctl restart ollama
+```
 
 ### Container assumptions
 
-- Port `8501` is the Streamlit HTTP port.
-- Environment variables provide all provider credentials.
+- Streamlit listens on container port `8501` and is published as host port `8605`.
+- FastAPI listens on container port `8000` and is published as host port `8003`.
+- Streamlit calls FastAPI internally at `http://api:8000`.
+- Host Ollama must expose the selected chat and embedding models to Docker's host gateway.
 - Compose runs Qdrant as a named-volume-backed service.
 - Compose mounts durable volumes for session checkpoints and the embedding cache.
 - The current image copies `documents/`, including the sample PDF. Review data-handling requirements before shipping private documents in an image.
@@ -609,7 +652,7 @@ Changing models should be accompanied by evaluation and, for embedding changes, 
 
 | Symptom | Likely cause | Action |
 |---|---|---|
-| Ollama connection error | Ollama is not running, the model is not pulled, or the URL is wrong | Start the Compose stack, check `docker compose logs ollama`, and verify `OLLAMA_BASE_URL` |
+| Ollama connection error | Host Ollama is not running, the model is not pulled, or Docker cannot reach its bridge address | Check `systemctl status ollama`, verify the host model with `ollama list`, and verify `OLLAMA_BASE_URL` |
 | Qdrant connection error | Incorrect URL, key, TLS, or network route | Test the endpoint, confirm port 6333, and review Qdrant Cloud credentials |
 | `TAVILY_API_KEY` error | Live-search path invoked without Tavily credentials | Add the key or use a paper/direct-answer query |
 | Upload succeeds but no titles appear | Collection creation or Qdrant write failed | Inspect terminal logs and verify Qdrant permissions |

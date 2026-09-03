@@ -10,38 +10,10 @@ services:
     volumes:
       - qdrant_data:/qdrant/storage
     healthcheck:
-      test: ["CMD-SHELL", "curl --fail http://localhost:6333/readyz || exit 1"]
+      test: ["CMD-SHELL", "bash -c ':> /dev/tcp/127.0.0.1/6333' || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 12
-
-  ollama:
-    image: ollama/ollama:latest
-    restart: unless-stopped
-    ports:
-      - "11434:11434"
-    volumes:
-      - ollama_data:/root/.ollama
-    healthcheck:
-      test: ["CMD", "ollama", "list"]
-      interval: 10s
-      timeout: 5s
-      retries: 30
-
-  ollama-init:
-    image: ollama/ollama:latest
-    depends_on:
-      ollama:
-        condition: service_healthy
-    environment:
-      OLLAMA_HOST: http://ollama:11434
-      LLM_PROVIDER: ${LLM_PROVIDER:-ollama}
-      OLLAMA_MODEL: ${OLLAMA_MODEL:-qwen3:8b}
-      OLLAMA_EMBEDDING_MODEL: ${OLLAMA_EMBEDDING_MODEL:-nomic-embed-text}
-    entrypoint: ["/bin/sh", "-lc"]
-    command: >-
-      "if [ \"$$LLM_PROVIDER\" = \"ollama\" ]; then ollama pull $$OLLAMA_MODEL && ollama pull $$OLLAMA_EMBEDDING_MODEL; else echo 'OpenAI selected; skipping Ollama model pull.'; fi"
-    restart: "no"
 
   api:
     build:
@@ -51,11 +23,11 @@ services:
     depends_on:
       qdrant:
         condition: service_healthy
-      ollama-init:
-        condition: service_completed_successfully
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     environment:
       LLM_PROVIDER: ${LLM_PROVIDER:-ollama}
-      OLLAMA_BASE_URL: http://ollama:11434
+      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
       OLLAMA_MODEL: ${OLLAMA_MODEL:-qwen3:8b}
       OLLAMA_EMBEDDING_MODEL: ${OLLAMA_EMBEDDING_MODEL:-nomic-embed-text}
       OLLAMA_EMBEDDING_DIM: ${OLLAMA_EMBEDDING_DIM:-768}
@@ -70,7 +42,7 @@ services:
       TAVILY_API_KEY: ${TAVILY_API_KEY:-}
     command: ["uvicorn", "backend.api:app", "--host", "0.0.0.0", "--port", "8000"]
     ports:
-      - "8000:8000"
+      - "8003:8000"
     volumes:
       - scholarlens_state:/app/data
       - scholarlens_cache:/app/embedding_cache
@@ -93,7 +65,7 @@ services:
       SCHOLARLENS_API_URL: http://api:8000
       SCHOLARLENS_API_TIMEOUT: 300
     ports:
-      - "8501:8501"
+      - "8605:8501"
     healthcheck:
       test: ["CMD-SHELL", "curl --fail http://localhost:8501/_stcore/health || exit 1"]
       interval: 30s
@@ -103,6 +75,5 @@ services:
 
 volumes:
   qdrant_data:
-  ollama_data:
   scholarlens_state:
   scholarlens_cache:
